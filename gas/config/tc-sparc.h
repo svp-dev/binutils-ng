@@ -75,6 +75,12 @@ extern void sparc_cons_align (int);
 #define HANDLE_ALIGN(fragp) sparc_handle_align (fragp)
 extern void sparc_handle_align (struct frag *);
 
+/* BEGIN LEON2-MT */
+extern int sparc_do_align (int n, const char *fill, int len, int max);
+#define md_do_align(N, FILL, LEN, MAX, LABEL) \
+  if (sparc_do_align(N, FILL, LEN, MAX)) goto LABEL;
+/* END LEON2-MT */
+
 #define MAX_MEM_FOR_RS_ALIGN_CODE  (3 + 4 + 4)
 
 /* I know that "call 0" fails in sparc-coff if this doesn't return 1.  I

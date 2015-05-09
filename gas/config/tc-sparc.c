@@ -123,6 +123,21 @@ int sparc_cie_data_alignment;
 			 || SPARC_OPCODE_ARCH_V9_P (max_architecture))
 #endif
 
+/* BEGIN LEON2-MT */
+
+/* if set, create a control word at every code address multiple of boundary */
+static unsigned int control_boundary = 0;
+
+/* if set, generate end bits in addition to switch bits */
+static int gen_end_bits = 0;
+
+/* Current locationa nd value of the control word */
+static char*         control_word_ptr = NULL;
+static unsigned long control_word = 0;
+static addressT      function_offset = 0;
+
+/* END LEON2-MT */
+
 /* Handle of the OPCODE hash table.  */
 static struct hash_control *op_hash;
 
@@ -134,6 +149,9 @@ static void s_common (int);
 static void s_empty (int);
 static void s_uacons (int);
 static void s_ncons (int);
+/* BEGIN LEON2-MT */
+static void s_ctlbits (int);
+/* END LEON2-MT */
 #ifdef OBJ_ELF
 static void s_register (int);
 #endif
@@ -163,6 +181,9 @@ const pseudo_typeS md_pseudo_table[] =
   {"8byte", s_uacons, 8},
   {"register", s_register, 0},
 #endif
+  /* BEGIN LEON2-MT */
+  {"ctlbits", s_ctlbits, 0},
+  /* END LEON2-MT */
   {NULL, 0, 0},
 };
 
@@ -1377,6 +1398,42 @@ synthetize_setx (const struct sparc_opcode *insn)
     }
 }
 
+
+/* BEGIN LEON2-MT */
+
+static void
+emit_control_word(char* f)
+{
+  control_word_ptr = f;
+  control_word     = 0;
+  md_number_to_chars (f, control_word, 4);
+}
+
+/* Sets the control bits in the current control word */
+static void
+set_control_bits(int bits)
+{
+  if (control_boundary > 0)
+  {
+      int offset;
+
+      if (control_word_ptr == NULL || function_offset < 4)
+      {
+	  as_bad (_("invalid control instruction location"));
+	  return;
+      }
+
+      unsigned bits_per_ctl = gen_end_bits ? 2 : 1;
+      unsigned bits_mask = gen_end_bits ? 0x3 : 0x1;
+      offset = bits_per_ctl * ((function_offset - 4) % control_boundary) / 4;
+      control_word |= (bits & bits_mask) << offset;
+      md_number_to_chars (control_word_ptr, control_word, 4);
+  }
+}
+
+/* END LEON2-MT */
+
+
 /* Main entry point to assemble one instruction.  */
 
 void
@@ -1385,10 +1442,44 @@ md_assemble (char *str)
   const struct sparc_opcode *insn;
   int special_case;
 
+  /* BEGIN LEON2-MT */
+  /* Special case for swtch and t_end */
+  if (strcmp(str, "swch") == 0)
+    {
+      set_control_bits (1);
+      return;
+    }
+  if (strcmp(str, "t_end") == 0)
+    {
+      set_control_bits (3);
+      /* t_end is also an instruction */
+    }
+  /* END LEON2-MT */
+
   know (str);
   special_case = sparc_ip (str, &insn);
   if (insn == NULL)
     return;
+
+  /* BEGIN LEON2-MT */
+  /* Delayed ops cannot be the last on a control word edge */
+  if (control_boundary != 0
+      && (insn->flags & F_DELAYED) != 0
+      && (function_offset % control_boundary) == (control_boundary-4))
+  {
+      if (last_insn != NULL
+	  && (last_insn->flags & F_DELAYED) != 0)
+      {
+	  as_fatal("unsupported: branch in delay slot at end of cache line");
+      }
+      struct sparc_it nop_insn;
+
+      nop_insn.opcode = NOP_INSN;
+      nop_insn.reloc = BFD_RELOC_NONE;
+      output_insn (insn, &nop_insn);
+      /* as_warn ("branch at end of cache line; NOP inserted"); */
+  }
+  /* END LEON2-MT */
 
   /* We warn about attempts to put a floating point branch in a delay slot,
      unless the delay slot has been annulled.  */
@@ -2283,6 +2374,38 @@ sparc_ip (char *str, const struct sparc_opcode **pinsn)
 			}
 		      goto error;
 
+		      /* BEGIN LEON2-MT */
+		    case 't':
+		    {
+			char ty = *s++;
+			if (ISDIGIT ((c = *s++)))
+			{
+			    c -= '0';
+			    if (ISDIGIT (*s))
+				c = c * 10 + (*s++ - '0');
+			}
+			else
+			    goto error;
+
+			switch (ty)
+			{
+			case 'l':
+			    if (c > 30)
+				goto error;
+			    mask = c + 1;
+			    break;
+			case 'g':
+			    if (c > 31)
+				goto error;
+			    mask = 31 - c;
+			    break;
+			default:
+			    goto error;
+			}
+			break;
+		    }
+		      /* END LEON2-MT */
+
 		    case 'r':	/* any register */
 		      if (!ISDIGIT ((c = *s++)))
 			{
@@ -2366,42 +2489,69 @@ sparc_ip (char *str, const struct sparc_opcode **pinsn)
 	      {
 		char format;
 
-		if (*s++ == '%'
-		    && ((format = *s) == 'f')
-		    && ISDIGIT (*++s))
-		  {
-		    for (mask = 0; ISDIGIT (*s); ++s)
-		      {
-			mask = 10 * mask + (*s - '0');
-		      }		/* read the number */
+		/* BEGIN LEON2-MT */
+		if (*s++ != '%')
+		    break;
+		if (*s == 't')
+		    /* threaded reg name, skip for now (see below) */
+		    ++s;
+		switch (format = *s)
+		{
+		case 'l': case 'g':
+		    ++s;
+		    break;
+		case 'f':
+		    break;
+		default:
+		    goto error;
+		}
+		if (*s != 'f')
+		    goto error;
+		if (!ISDIGIT(*++s))
+		    goto error;
 
-		    if ((*args == 'v'
+		for (mask = 0; ISDIGIT (*s); ++s)
+		{
+		    mask = 10 * mask + (*s - '0');
+		}		/* read the number */
+		switch (format)
+		{
+		case 'g':
+		    mask = 31 - mask;
+		    break;
+		default: break;
+		}
+		if (mask > 31)
+		    goto error;
+		/* END LEON2-MT */
+
+		if ((*args == 'v'
 			 || *args == 'B'
 			 || *args == '5'
 			 || *args == 'H')
 			&& (mask & 1))
-		      {
+		  {
 			break;
-		      }		/* register must be even numbered */
+		  }		/* register must be even numbered */
 
-		    if ((*args == 'V'
+		if ((*args == 'V'
 			 || *args == 'R'
 			 || *args == 'J')
 			&& (mask & 3))
-		      {
+		  {
 			break;
-		      }		/* register must be multiple of 4 */
+		  }		/* register must be multiple of 4 */
 
-		    if (mask >= 64)
-		      {
+		if (mask >= 64)
+		  {
 			if (SPARC_OPCODE_ARCH_V9_P (max_architecture))
 			  error_message = _(": There are only 64 f registers; [0-63]");
 			else
 			  error_message = _(": There are only 32 f registers; [0-31]");
 			goto error;
-		      }	/* on error */
-		    else if (mask >= 32)
-		      {
+		  }	/* on error */
+		else if (mask >= 32)
+		  {
 			if (SPARC_OPCODE_ARCH_V9_P (max_architecture))
 			  {
 			    if (*args == 'e' || *args == 'f' || *args == 'g')
@@ -2418,12 +2568,7 @@ sparc_ip (char *str, const struct sparc_opcode **pinsn)
 			    error_message = _(": There are only 32 f registers; [0-31]");
 			    goto error;
 			  }
-		      }
 		  }
-		else
-		  {
-		    break;
-		  }	/* if not an 'f' register.  */
 
 		if (*args == '}' && mask != RS2 (opcode))
 		  {
@@ -3191,13 +3336,28 @@ get_expression (char *str)
 static void
 output_insn (const struct sparc_opcode *insn, struct sparc_it *theinsn)
 {
-  char *toP = frag_more (4);
+
+  /* BEGIN LEON2-MT */
+  char *toP;
+  if (control_boundary != 0
+      && (function_offset % control_boundary) == 0)
+  {
+     /* Output the control word first */
+     emit_control_word (frag_more (4));
+     function_offset = 4;
+  }
+  toP = frag_more (4);
+  /* END LEON2-MT */
 
   /* Put out the opcode.  */
   if (INSN_BIG_ENDIAN)
     number_to_chars_bigendian (toP, (valueT) theinsn->opcode, 4);
   else
     number_to_chars_littleendian (toP, (valueT) theinsn->opcode, 4);
+
+  /* BEGIN LEON2-MT */
+  function_offset += 4;
+  /* END LEON2-MT */
 
   /* Put out the symbol-dependent stuff.  */
   if (theinsn->reloc != BFD_RELOC_NONE)
@@ -4372,6 +4532,50 @@ s_ncons (int bytes ATTRIBUTE_UNUSED)
   cons (sparc_arch_size == 32 ? 4 : 8);
 }
 
+/* BEGIN LEON2-MT */
+/* exported from read.c: */
+extern void do_align (int, char *, int, int);
+
+static void
+s_ctlbits (int bytes ATTRIBUTE_UNUSED)
+{
+    unsigned bits_per_ctl;
+
+    control_boundary = get_absolute_expression ();
+    gen_end_bits = get_absolute_expression ();
+    demand_empty_rest_of_line ();
+
+    if (control_boundary & (control_boundary - 1))
+	as_bad(".ctlbits operand is not power of 2");
+    if (control_boundary > 0 && control_boundary < 8)
+	as_bad(".ctlbits operand too small");
+
+    bits_per_ctl = (control_boundary / 4) * (gen_end_bits ? 2 : 1);
+    if (bits_per_ctl > 32)
+	as_bad(".ctlbits operand too large");
+
+    if (control_boundary != 0)
+    {
+	unsigned l2;
+	for (l2 = 0; (control_boundary >> l2) > 1; ++l2)
+	    ;
+	do_align (l2, (char *) NULL, 0, 0);
+	emit_control_word (frag_more (4));
+    }
+    function_offset = 4;
+}
+
+/* This function gets called by read.c on alignments */
+int
+sparc_do_align (int n, const char * fill ATTRIBUTE_UNUSED, int len ATTRIBUTE_UNUSED, int max ATTRIBUTE_UNUSED)
+{
+  /* Since we independently keep track of the in-function offset - * we need to advance it manually */
+  function_offset += ((1 << n) - (function_offset % (1 << n))) % (1 << n);
+  return 0;
+}
+
+/* END LEON2-MT */
+
 #ifdef OBJ_ELF
 /* Handle the SPARC ELF .register pseudo-op.  This sets the binding of a
    global register.
@@ -4540,6 +4744,10 @@ sparc_handle_align (fragS *fragp)
   char *p;
 
   count = fragp->fr_next->fr_address - fragp->fr_address - fragp->fr_fix;
+
+  /* BEGIN LEON2-MT */
+  function_offset += count;
+  /* END LEON2-MT */
 
   switch (fragp->fr_type)
     {
