@@ -849,8 +849,6 @@ const struct sparc_opcode sparc_opcodes[] = {
 
 /* BEGIN LEON2-MT */
 
-{ "f_alloc",          F3(2, 0x08, 0), F3(~2, ~0x08, ~0)|RS1_G0|ASI_RS2(~0),  "d", 0, 0, 0, v8 },
-{ "f_alloc",          F3(2, 0x08, 1), F3(~2, ~0x08, ~1)|RS1_G0|SIMM13(~0),   "d", 0, 0, 0, v8 },
 { "t_get_fid",        F3(2, 0x2c, 0), F3(~2, ~0x2c, ~0)|RS1_G0|ASI_RS2(~0),  "d", 0, 0, 0, v8 },
 { "t_get_fid",        F3(2, 0x2c, 1), F3(~2, ~0x2c, ~1)|RS1_G0|SIMM13(~0),   "d", 0, 0, 0, v8 },
 { "t_get_tid",        F3(2, 0x2d, 0), F3(~2, ~0x2d, ~0)|RS1_G0|ASI_RS2(~0),  "d", 0, 0, 0, v8 },
@@ -865,6 +863,8 @@ const struct sparc_opcode sparc_opcodes[] = {
 { "f_break",          F3(2, 0x0e, 1), F3(~2, ~0x0e, ~1)|RD_G0|SIMM13(~0),    "1", 0, 0, 0, v8 },
 { "f_break",          F3(2, 0x0e, 0), F3(~2, ~0x0e, ~0)|RD_G0|RS1_G0|ASI_RS2(~0), "", 0, 0, 0, v8 },
 { "f_break",          F3(2, 0x0e, 1), F3(~2, ~0x0e, ~1)|RD_G0|RS1_G0|SIMM13(~0),  "", 0, 0, 0, v8 },
+{ "f_alloc",          F3(3, 0x08, 0), F3(~3, ~0x08, ~0)|RS1_G0|ASI_RS2(~0),  "d", 0, 0, 0, v8 },
+{ "f_alloc",          F3(3, 0x08, 1), F3(~3, ~0x08, ~1)|RS1_G0|SIMM13(~0),   "d", 0, 0, 0, v8 },
 { "r_allocsrb",       F3(3, 0x28, 0), F3(~3, ~0x28, ~0)|RS1_G0|ASI(~0),      "2,d", 0, 0, 0, v8 },
 { "r_allocsrb",       F3(3, 0x28, 1), F3(~3, ~0x28, ~1)|RS1_G0,              "i,d", 0, 0, 0, v8 },
 { "r_freesrb",        F3(3, 0x38, 0), F3(~3, ~0x38, ~0)|RD_G0|ASI_RS2(~0),   "1", 0, 0, 0, v8 },
