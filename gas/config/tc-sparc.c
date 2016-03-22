@@ -1451,7 +1451,7 @@ md_assemble (char *str)
     }
   if (strcmp(str, "t_end") == 0)
     {
-      set_control_bits (3);
+      set_control_bits (2);
       /* t_end is also an instruction */
     }
   /* END LEON2-MT */
