@@ -77,6 +77,23 @@ static  char *reg_names[] =
   "y", "psr", "wim", "tbr", "pc", "npc", "fpsr", "cpsr"
 };
 
+static  char *mtreg_names[] =
+{ "r0", "r1:l0", "r2:l1", "r3:l2", "r4:l3", "r5:l4", "r6:l5", "r7:l6",
+  "r8:l7", "r9:l8", "r10:l9", "r11:l10", "r12:l11", "r13:l12", "r14:l13", "r15:l14",
+  "r16:l15/g15", "r17:l16/g14", "r18:l17/g13", "r19:l18/g12", "r20:l19/g11", "r21:l20/g10", "r22:l21/g9", "r23:l22/g8",
+  "r24:l23/g7", "r25:l24/g6", "r26:l25/g5", "r27:l26/g4", "r28:l27/g3", "r29:l28/g2", "r30:l29/g1", "r31:l30/g0",
+  "f0", "f1", "f2", "f3", "f4", "f5", "f6", "f7",
+  "f8", "f9", "f10", "f11", "f12", "f13", "f14", "f15",
+  "f16", "f17", "f18", "f19", "f20", "f21", "f22", "f23",
+  "f24", "f25", "f26", "f27", "f28", "f29", "f30", "f31",
+  "f32", "f33", "f34", "f35", "f36", "f37", "f38", "f39",
+  "f40", "f41", "f42", "f43", "f44", "f45", "f46", "f47",
+  "f48", "f49", "f50", "f51", "f52", "f53", "f54", "f55",
+  "f56", "f57", "f58", "f59", "f60", "f61", "f62", "f63",
+/* psr, wim, tbr, fpsr, cpsr are v8 only.  */
+  "y", "psr", "wim", "tbr", "pc", "npc", "fpsr", "cpsr"
+};
+
 #define	freg_names	(&reg_names[4 * 8])
 
 /* These are ordered according to there register number in
@@ -472,6 +489,13 @@ print_insn_sparc (bfd_vma memaddr, disassemble_info *info)
   /* bfd mach number of last call.  */
   static unsigned long current_mach = 0;
   bfd_vma (*getword) (const void *);
+  int mtregs = 0;
+  if (info->disassembler_options) {
+      if (strcmp(info->disassembler_options, "reg-names-mt") == 0)
+	  mtregs = 1;
+      else if (strcmp(info->disassembler_options, "reg-names-raw") == 0)
+	  mtregs = 2;
+  }
 
   if (!opcodes_initialized
       || info->mach != current_mach)
@@ -610,7 +634,11 @@ print_insn_sparc (bfd_vma memaddr, disassemble_info *info)
 		    (*info->fprintf_func) (stream, "0");
 		    break;
 
-#define	reg(n)	(*info->fprintf_func) (stream, "%%%s", reg_names[n])
+#define	reg(n)	switch(mtregs) {					\
+		    case 2: (*info->fprintf_func) (stream, "%%r%d", n); break; \
+		    case 1: (*info->fprintf_func) (stream, "%%{%s}", mtreg_names[n]); break; \
+		    default: (*info->fprintf_func) (stream, "%%%s", reg_names[n]); break; \
+		    }
 		  case '1':
 		  case 'r':
 		    reg (X_RS1 (insn));
