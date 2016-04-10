@@ -107,6 +107,9 @@ extern int target_big_endian;
 
 static int target_little_endian_data;
 
+/* Label pointing to current instruction */
+static symbolS* mtsparc_insn_label = NULL;
+
 /* Symbols for global registers on v9.  */
 static symbolS *globals[8];
 
@@ -1407,6 +1410,12 @@ emit_control_word(char* f)
   control_word_ptr = f;
   control_word     = 0;
   md_number_to_chars (f, control_word, 4);
+  
+  if (mtsparc_insn_label != NULL)
+    {
+      /* Adjust label so it points to the data following the control word */
+      symbol_set_value_now (mtsparc_insn_label);
+    }
 }
 
 /* Sets the control bits in the current control word */
@@ -3357,6 +3366,7 @@ output_insn (const struct sparc_opcode *insn, struct sparc_it *theinsn)
 
   /* BEGIN LEON2-MT */
   function_offset += 4;
+  mtsparc_insn_label = NULL;
   /* END LEON2-MT */
 
   /* Put out the symbol-dependent stuff.  */
@@ -4454,7 +4464,10 @@ s_empty (int ignore ATTRIBUTE_UNUSED)
 
 static void
 s_seg (int ignore ATTRIBUTE_UNUSED)
-{
+{    
+  /* BEGIN LEON2-MT */
+  mtsparc_insn_label = NULL;
+  /* END LEON2-MT */
 
   if (strncmp (input_line_pointer, "\"text\"", 6) == 0)
     {
@@ -4708,6 +4721,11 @@ sparc_cons_align (int nbytes)
 {
   int nalign;
 
+  /* BEGIN LEON2-MT */
+  mtsparc_insn_label = NULL;
+  /* END LEON2-MT */
+
+  
   /* Only do this if we are enforcing aligned data.  */
   if (! enforce_aligned_data)
     return;
@@ -5077,3 +5095,11 @@ sparc_cfi_emit_pcrel_expr (expressionS *exp, unsigned int nbytes)
   emit_expr_with_reloc (exp, nbytes, "disp");
   sparc_no_align_cons = 0;
 }
+
+/* BEGIN LEON2-MT */
+void sparc_define_label (symbolS * s)
+{
+  mtsparc_insn_label = s;
+}
+/* END LEON2-MT */
+

@@ -79,6 +79,9 @@ extern void sparc_handle_align (struct frag *);
 extern int sparc_do_align (int n, const char *fill, int len, int max);
 #define md_do_align(N, FILL, LEN, MAX, LABEL) \
   if (sparc_do_align(N, FILL, LEN, MAX)) goto LABEL;
+
+#define tc_frob_label(sym) sparc_define_label (sym)
+extern void sparc_define_label (symbolS *);
 /* END LEON2-MT */
 
 #define MAX_MEM_FOR_RS_ALIGN_CODE  (3 + 4 + 4)
