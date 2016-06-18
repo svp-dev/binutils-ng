@@ -1472,21 +1472,32 @@ md_assemble (char *str)
 
   /* BEGIN LEON2-MT */
   /* Delayed ops cannot be the last on a control word edge */
-  if (control_boundary != 0
-      && (insn->flags & F_DELAYED) != 0
-      && (function_offset % control_boundary) == (control_boundary-4))
+  if (control_boundary != 0)
   {
-      if (last_insn != NULL
-	  && (last_insn->flags & F_DELAYED) != 0)
-      {
-	  as_fatal("unsupported: branch in delay slot at end of cache line");
-      }
       struct sparc_it nop_insn;
-
+	  
       nop_insn.opcode = NOP_INSN;
       nop_insn.reloc = BFD_RELOC_NONE;
-      output_insn (insn, &nop_insn);
-      /* as_warn ("branch at end of cache line; NOP inserted"); */
+      if ((insn->flags & F_DELAYED) != 0 &&
+	  (function_offset % control_boundary) == (control_boundary-4))
+      {
+	  if (last_insn != NULL
+	      && (last_insn->flags & F_DELAYED) != 0)
+	  {
+	      as_fatal("unsupported: branch in delay slot at end of cache line");
+	  }
+	  output_insn (insn, &nop_insn);
+	  as_warn ("branch at end of cache line; NOP inserted");
+      } else 
+	  /* Instructions that store the return address in a register cannot
+	     compute a return address at the control word edge */
+	  if ((insn->flags & F_JSR) != 0 &&
+	      (function_offset % control_boundary) == (control_boundary-8))
+	  {
+	      output_insn (insn, &nop_insn);
+	      output_insn (insn, &nop_insn);
+	      as_warn ("branch return address at end of cache line; NOP;NOP inserted");
+	  }
   }
   /* END LEON2-MT */
 
