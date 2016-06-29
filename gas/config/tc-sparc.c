@@ -128,6 +128,13 @@ int sparc_cie_data_alignment;
 
 /* BEGIN LEON2-MT */
 
+/* if set, ensure that delayed instructions (incl. branches) are not last on a control word edge */
+static int dealign_delayed = 1;
+
+/* if set, ensure that the return address of a branch-and-link instruction does not fall 
+   at the beginning of a control word edge */
+static int dealign_jmpl_return = 1;
+
 /* if set, create a control word at every code address multiple of boundary */
 static unsigned int control_boundary = 0;
 
@@ -508,6 +515,16 @@ struct option md_longopts[] = {
   {"relax", no_argument, NULL, OPTION_RELAX},
 #define OPTION_NO_RELAX (OPTION_MD_BASE + 15)
   {"no-relax", no_argument, NULL, OPTION_NO_RELAX},
+/* BEGIN LEON2-MT */
+#define OPTION_DEALIGN_JMPL_RET (OPTION_MD_BASE + 16)
+  {"dealign-jmpl-return", no_argument, NULL, OPTION_DEALIGN_JMPL_RET},
+#define OPTION_NO_DEALIGN_JMPL_RET (OPTION_MD_BASE + 17)
+  {"no-dealign-jmpl-return", no_argument, NULL, OPTION_NO_DEALIGN_JMPL_RET},
+#define OPTION_DEALIGN_DELAYED (OPTION_MD_BASE + 18)
+  {"align-delayed-insns", no_argument, NULL, OPTION_DEALIGN_DELAYED},
+#define OPTION_NO_DEALIGN_DELAYED (OPTION_MD_BASE + 19)
+  {"no-dealign-delayed-insns", no_argument, NULL, OPTION_NO_DEALIGN_DELAYED},
+/* END LEON2-MT */
   {NULL, no_argument, NULL, 0}
 };
 
@@ -691,6 +708,23 @@ md_parse_option (int c, char *arg)
       sparc_relax = 0;
       break;
 
+/* BEGIN LEON2-MT */
+    case OPTION_DEALIGN_JMPL_RET:
+      dealign_jmpl_return = 1;
+      break;
+	
+    case OPTION_NO_DEALIGN_JMPL_RET:
+      dealign_jmpl_return = 0;
+      break;
+
+    case OPTION_DEALIGN_DELAYED:
+      dealign_delayed = 1;
+      break;
+
+    case OPTION_NO_DEALIGN_DELAYED:
+      dealign_delayed = 0;
+      break;
+/* END LEON2-MT */
     default:
       return 0;
     }
@@ -1479,7 +1513,8 @@ md_assemble (char *str)
       nop_insn.opcode = NOP_INSN;
       nop_insn.reloc = BFD_RELOC_NONE;
       if ((insn->flags & F_DELAYED) != 0 &&
-	  (function_offset % control_boundary) == (control_boundary-4))
+	  (function_offset % control_boundary) == (control_boundary-4) &&
+	  dealign_delayed)
       {
 	  if (last_insn != NULL
 	      && (last_insn->flags & F_DELAYED) != 0)
@@ -1492,7 +1527,8 @@ md_assemble (char *str)
 	  /* Instructions that store the return address in a register cannot
 	     compute a return address at the control word edge */
 	  if ((insn->flags & F_JSR) != 0 &&
-	      (function_offset % control_boundary) == (control_boundary-8))
+	      (function_offset % control_boundary) == (control_boundary-8) &&
+	      dealign_jmpl_return)
 	  {
 	      output_insn (insn, &nop_insn);
 	      output_insn (insn, &nop_insn);
