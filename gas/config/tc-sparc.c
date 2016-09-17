@@ -521,7 +521,7 @@ struct option md_longopts[] = {
 #define OPTION_NO_DEALIGN_JMPL_RET (OPTION_MD_BASE + 17)
   {"no-dealign-jmpl-return", no_argument, NULL, OPTION_NO_DEALIGN_JMPL_RET},
 #define OPTION_DEALIGN_DELAYED (OPTION_MD_BASE + 18)
-  {"align-delayed-insns", no_argument, NULL, OPTION_DEALIGN_DELAYED},
+  {"dealign-delayed-insns", no_argument, NULL, OPTION_DEALIGN_DELAYED},
 #define OPTION_NO_DEALIGN_DELAYED (OPTION_MD_BASE + 19)
   {"no-dealign-delayed-insns", no_argument, NULL, OPTION_NO_DEALIGN_DELAYED},
 /* END LEON2-MT */
@@ -5001,6 +5001,9 @@ sparc_cons (expressionS *exp, int size)
 		{
 		  *end = '\0';
 		  expression (exp);
+		  /* BEGIN LEON2-MT */
+		  function_offset += size;
+		  /* END LEON2-MT */
 		  *end = c;
 		  if (input_line_pointer != end)
 		    {
@@ -5021,7 +5024,12 @@ sparc_cons (expressionS *exp, int size)
 	}
     }
   if (sparc_cons_special_reloc == NULL)
+  {
     expression (exp);
+    /* BEGIN LEON2-MT */
+    function_offset += size;
+    /* END LEON2-MT */
+  }
   return sparc_cons_special_reloc;
 }
 
