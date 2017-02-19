@@ -1,3 +1,8 @@
+2016-12-05  Alyssa Milburn <amilburn@zall.org>
+
+	* elfxx-sparc.c: Do not stop processing relocations after
+	partially relaxing a call with WDISP30.
+
 2014-10-15  Tristan Gingold  <gingold@adacore.com>
 
 	* src-release.sh (do_proto_toplev): Configure with --target.
